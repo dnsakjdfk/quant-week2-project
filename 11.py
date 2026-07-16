@@ -1,60 +1,9 @@
 import ssl
+# 解决nltk下载SSL报错（此处不再依赖新闻情感，保留兼容）
 ssl._create_default_https_context = ssl._create_unverified_context
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import nltk
-
-
-# 新闻情感依赖
-try:
-    from newsapi import NewsApiClient
-    from textblob import TextBlob
-    nltk.download('punkt', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    HAS_NEWS = True# 绑定远程仓库
-    NEWS_API_KEY = "6135d732b3bc4e088c3f7a1d3adbf9b8"
-except ImportError:
-    HAS_NEWS = False
-    NEWS_API_KEY = ""
-    print("警告：未安装新闻相关依赖，新闻情绪将统一填充中性0.5")
-
-
-# 抓取新闻并生成日度新闻情绪
-def get_news_sentiment(start_date: str, end_date: str):
-    if not HAS_NEWS or len(NEWS_API_KEY.strip()) == 0:
-        return None
-    try:
-        newsapi = NewsApiClient(api_key=NEWS_API_KEY)
-        # 文档指定检索关键词
-        query = "JPM OR FOMC OR US stock market OR earnings reports OR stock options OR volatility"
-        articles = newsapi.get_everything(
-            q=query,
-            from_param=start_date,
-            to=end_date,
-            language="en",
-            sort_by="publishedAt"
-        )["articles"]
-
-        sent_records = []
-        for art in articles:
-            pub_dt = pd.to_datetime(art["publishedAt"]).date()
-            content = str(art["title"]) + " " + str(art["content"] or "")
-            # TextBlob极性：[-1 极度负面, 1 极度正面]
-            polarity = TextBlob(content).sentiment.polarity
-            sent_records.append({"Date": pd.Timestamp(pub_dt), "polarity": polarity})
-
-        if not sent_records:
-            return None
-        news_df = pd.DataFrame(sent_records)
-        # 按日期取平均情感
-        daily_sent = news_df.groupby("Date")["polarity"].mean().reset_index()
-        # [-1,1] 映射至 [0(极度看空),1(极度看多)]
-        daily_sent["news_sentiment"] = (daily_sent["polarity"] + 1) / 2
-        return daily_sent[["Date", "news_sentiment"]]
-    except Exception as e:
-        print(f"新闻接口请求失败: {e}，当日新闻情绪使用0.5中性值")
-        return None
 
 
 def load_and_clean_data():
@@ -127,26 +76,13 @@ def build_features(df):
     df['VIX_MA20'] = df['VIX_Close'].rolling(window=20).mean()
     df['VIX_JPM_Correlation_20D'] = df['VIX_Close'].rolling(window=20).corr(df['Close'])
 
-    # ========== 1.VIX衍生情绪分 ==========
+    # ========== VIX衍生情绪分 0~1 ==========
     vix_min = df['VIX_Close'].min()
     vix_max = df['VIX_Close'].max()
     df['vix_sentiment'] = 1 - (df['VIX_Close'] - vix_min) / (vix_max - vix_min)
 
-    # ========== 2.合并新闻情绪分 ==========
-    start = df["Date"].min().strftime("%Y-%m-%d")
-    end = df["Date"].max().strftime("%Y-%m-%d")
-    news_df = get_news_sentiment(start, end)
-    if news_df is not None:
-        df = pd.merge(df, news_df, on="Date", how="left")
-        df["news_sentiment"] = df["news_sentiment"].fillna(0.5)
-    else:
-        df["news_sentiment"] = 0.5
-
-    # ========== 3.文档要求：综合市场情绪 Comprehensive Score 0~1 ==========
-    # 权重：新闻0.6，VIX波动率0.4
-    weight_news = 0.6
-    weight_vix = 0.4
-    df["comprehensive_market_sentiment"] = weight_news * df["news_sentiment"] + weight_vix * df["vix_sentiment"]
+    # ========== 综合市场情绪（仅VIX维度，无无效0.5新闻列） ==========
+    df["comprehensive_market_sentiment"] = df["vix_sentiment"]
 
     # 剔除滚动窗口NaN
     df = df.dropna().reset_index(drop=True)

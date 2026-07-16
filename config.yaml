@@ -1,0 +1,9 @@
+# API Key Configuration
+alpha_vantage_key: "YC0E7XTZI6VT8IV2"
+fred_api_key: "f051272e54aeff0e48ad5b1ea53ae94d"
+# Yahoo Finance 无需密钥
+news_api_key: "6135d732b3bc4e088c3f7a1d3adbf9b8"
+# Data range
+start_date: "2018-01-01"
+end_date: "2024-12-31"
+request_delay: 30  # 接口请求间隔，防止限流
