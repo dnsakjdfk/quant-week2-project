@@ -28,7 +28,7 @@ jobs:
       - name: 执行数据预处理脚本
         env:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }} # 在仓库Secrets填入你的新闻API密钥
-        run: python your_script_name.py
+        run: python week2.py
 
       - name: 提交更新后的数据集回仓库
         run: |
