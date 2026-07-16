@@ -1,0 +1,41 @@
+name: 量化数据自动预处理流水线
+# 1. 触发规则：定时每周日UTC 2点执行（北京时间每周日10点）
+on:
+  schedule:
+    - cron: '0 2 * * 0'
+  # 支持手动一键测试运行
+  workflow_dispatch:
+
+jobs:
+  run_preprocess:
+    runs-on: ubuntu-latest # GitHub提供免费云端Linux虚拟机
+    steps:
+      # 步骤1：拉取仓库全部代码、原始数据文件
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 步骤2：配置Python运行环境
+      - name: 配置Python3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      # 步骤3：自动安装全部依赖
+      - name: 安装依赖包
+        run: pip install -r requirements.txt
+
+      # 步骤4：核心——自动运行你的预处理代码
+      - name: 执行数据清洗与特征工程
+        run: python week2.py
+
+      # 步骤5：将新生成的数据集自动提交回仓库保存
+      - name: 自动推送更新后的数据集
+        run: |
+          git config --global user.name "QuantAutoBot"
+          git config --global user.email "bot@quant-auto.com"
+          git add processed_data.csv processed_data.parquet
+          git commit -m "自动化定时更新数据集 $(date +%Y-%m-%d)"
+          git push
