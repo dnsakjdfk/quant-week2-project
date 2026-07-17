@@ -1,22 +1,19 @@
 name: Auto Data Preprocess Pipeline
-# 定时触发：美股交易日每日凌晨2点（UTC时区）自动执行
 on:
   schedule:
     - cron: "0 2 * * 1-5"
-  # 支持手动点击运行
   workflow_dispatch:
 
 jobs:
   run_preprocess:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 授予流水线读写仓库文件权限
+      contents: write
     steps:
       - name: 拉取仓库代码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
 
       - name: 配置Python环境
         uses: actions/setup-python@v5
@@ -33,12 +30,10 @@ jobs:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
         run: python week2.py
 
-      - name: 提交并推送更新后的数据集
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 提交更新数据集
         run: |
           git config --global user.name "AutoPipelineBot"
           git config --global user.email "bot@github.com"
           git add processed_data.csv processed_data.parquet
-          git commit -m "Auto update processed dataset via GitHub Actions schedule" || echo "无数据更新，跳过提交"
+          git commit -m "Auto update dataset" || echo "无变更"
           git push origin main
